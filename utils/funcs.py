@@ -92,6 +92,44 @@ def html_to_markdown_table(html_content):
     markdown_table += "|-------|---------|----------|\n"
     markdown_table += f"| {title} | {summary} | {', '.join(entities)} |\n"
     
+    
+    
     return markdown_table
 
 
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.document_loaders import TextLoader
+
+from langchain_text_splitters import (
+    Language,
+    RecursiveCharacterTextSplitter,
+    MarkdownHeaderTextSplitter
+)
+
+
+def load_and_split(sources):
+    
+    # DirectoryLoader를 사용하여 .md 파일 로드
+    loader = DirectoryLoader(".", glob=sources, loader_cls=TextLoader)
+    docs = loader.load()
+
+    markdown_document = ""
+
+    for doc in docs:
+        markdown_document += doc.page_content + "\n\n"
+
+    headers_to_split_on = [
+        ("#", "Header 1"),  # 분할할 헤더 레벨과 해당 레벨의 이름을 지정합니다.
+        ("##", "Header 2"),  # 분할할 헤더 레벨과 해당 레벨의 이름을 지정합니다.
+        ("###", "Header 3"),
+    ]
+
+    # Markdown 문서를 헤더 레벨에 따라 분할합니다.
+    markdown_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on, strip_headers=False
+    )
+    md_header_splits = markdown_splitter.split_text(markdown_document)
+
+    new_docs = [doc for doc in md_header_splits if 'References' not in doc.metadata['Header 1']]
+
+    return new_docs

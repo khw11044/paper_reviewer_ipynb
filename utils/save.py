@@ -1,6 +1,37 @@
 import os
+import re
 from bs4 import BeautifulSoup
+import markdownify
 from markdownify import markdownify as markdown
+
+def format_text(text):
+    # .\n을 `. \n`으로 변경
+    text = re.sub(r'\.\n', r'. \n', text)
+    
+    
+    match = re.search(r'(References\n[=-]+\n.*?)(?=\n\n\d+\.|\Z)', text, re.DOTALL | re.IGNORECASE)
+    
+    if match:
+        # References 섹션 전 부분
+        a_before = text[:match.start()]
+        
+        # References 섹션
+        b = match.group(1)
+        
+        # References 이후의 부분 (예: 7. Appendix 등)
+        a_after = text[match.end():]
+        
+        # a_before와 a_after를 결합
+        a = a_before + a_after
+        
+        return a, b
+    
+    # References 섹션을 찾지 못한 경우
+    return text, ""
+
+
+
+
 
 def save_results(output_folder, filename, html_content):
     
@@ -21,7 +52,10 @@ def save_results(output_folder, filename, html_content):
     md_output = markdown(
         combined_html_content,
         convert=html_tag_list,
+        heading_style=markdownify.ATX
     )
+    
+    # md_output = format_markdown_headers(md_output)
 
     with open(md_output_file, "w", encoding="utf-8") as f:
         f.write(md_output)

@@ -32,9 +32,10 @@ class GraphState(TypedDict):
     texts: list[str]                                    # text
     texts_summary: dict[str, str]                            # text summary
     
-    texts_trans: list[str]
+    texts_trans: dict[str, str]
     texts_trans_summary: dict[str, str]                      # text summary
     
+    paper_trans: dict[str, str]
     paper_summary: str                            # paper summary
     paper_trans_summary: str
     

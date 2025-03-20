@@ -20,9 +20,9 @@ def get_chain(model_name, prompt):
     # 문서 요약을 위한 체인을 생성합니다.
     # 이 체인은 여러 문서를 입력받아 하나의 요약된 텍스트로 결합합니다.
     prompt = PromptTemplate.from_template(prompt)
-    text_summary_chain = create_stuff_documents_chain(llm, prompt)
+    llm_chain = create_stuff_documents_chain(llm, prompt)
     
-    return text_summary_chain
+    return llm_chain
 
 
 def create_text_summary(text_summary_chain, state: GraphState):
@@ -37,7 +37,9 @@ def create_text_summary(text_summary_chain, state: GraphState):
 
     # 각 페이지의 텍스트를 Document 객체로 변환하여 입력 리스트를 생성합니다.
     inputs = [
-        {"context": [Document(page_content=text)]} for page_num, text in sorted_texts
+        {"context": [Document(page_content=text)]} 
+        for page_num, text in sorted_texts 
+        if '# References' not in text
     ]
 
     # text_summary_chain을 사용하여 일괄 처리로 요약을 생성합니다.
@@ -50,27 +52,6 @@ def create_text_summary(text_summary_chain, state: GraphState):
     # 요약된 텍스트를 포함한 새로운 GraphState 객체를 반환합니다.
     return GraphState(texts_summary=text_summary)
 
-# def map_reduce_summary(paper_summary_chain, state: GraphState):
-#     # state에서 텍스트 데이터를 가져옵니다.
-#     texts = state["text_summary"]
-
-#     # 요약된 텍스트를 저장할 딕셔너리를 초기화합니다.
-#     paper_summary = dict()
-
-#     # 각 페이지의 텍스트를 Document 객체로 변환하여 입력 리스트를 생성합니다.
-#     inputs = [
-#         {"context": [Document(page_content=text)]} for page_num, text in texts.items()
-#     ]
-
-#     # paper_summary_chain을 사용하여 일괄 처리로 요약을 생성합니다.
-#     summaries = paper_summary_chain.batch(inputs)
-
-#     # 생성된 요약을 페이지 번호와 함께 딕셔너리에 저장합니다.
-#     for page_num, summary in enumerate(summaries):
-#         paper_summary[page_num] = summary
-
-#     # 요약된 텍스트를 포함한 새로운 GraphState 객체를 반환합니다.
-#     return GraphState(paper_summary=paper_summary)
 
 
 def map_reduce_summary(paper_summary_chain, state: GraphState):
@@ -115,6 +96,33 @@ def create_text_trans_summary(trans_chain, state: GraphState):
     # 요약된 텍스트를 포함한 새로운 GraphState 객체를 반환합니다.
     return GraphState(texts_trans_summary=text_trans_summary, paper_trans_summary=summaries_trans)
 
+def create_text_trans(trans_chain, state: GraphState):
+
+    texts = state["texts"]
+    
+    text_trans = dict()
+    
+    # texts.items()를 페이지 번호(키)를 기준으로 오름차순 정렬합니다.
+    sorted_texts = sorted(texts.items(), key=lambda x: x[0])
+
+    # 각 페이지의 텍스트를 Document 객체로 변환하여 입력 리스트를 생성합니다.
+    inputs = [
+        {"context": [Document(page_content=text)]} 
+        for page_num, text in sorted_texts 
+        if '# References' not in text
+    ]
+
+    # text_summary_chain을 사용하여 일괄 처리로 요약을 생성합니다.
+    translated_paragraph = trans_chain.batch(inputs)
+
+    # 생성된 요약을 페이지 번호와 함께 딕셔너리에 저장합니다.
+    for page_num, translated_text in enumerate(translated_paragraph):
+        text_trans[str(page_num)] = translated_text
+
+    # 요약된 텍스트를 포함한 새로운 GraphState 객체를 반환합니다.
+    return GraphState(paper_trans=text_trans)
+
+
 
 def create_table_markdown(table_markdown_extractor, state: GraphState):
     # table_markdown_extractor를 사용하여 테이블 마크다운 생성
@@ -141,11 +149,12 @@ def create_equation_summary_data_batches(state: GraphState):
     data_batches = []
 
     # 페이지 번호를 오름차순으로 정렬
-    page_numbers = sorted(list(state["section_elements"].keys()))
+    page_numbers = list(state["texts_summary"].keys())
 
     for page_num in page_numbers:
         # 각 페이지의 요약된 텍스트를 가져옴
         # 해당 페이지의 모든 이미지 요소에 대해 반복
+        page_num = int(page_num)
         for image_element in state["section_elements"][page_num]["equation_elements"]:
             # 이미지 ID를 정수로 변환
             image_id = str(image_element["id"])
@@ -166,12 +175,13 @@ def create_image_summary_data_batches(state: GraphState):
     data_batches = []
 
     # 페이지 번호를 오름차순으로 정렬
-    page_numbers = sorted(list(state["section_elements"].keys()))
+    page_numbers = list(state["texts_summary"].keys())
 
     for page_num in page_numbers:
         # 각 페이지의 요약된 텍스트를 가져옴
         text = state["texts_summary"][str(page_num)]
         # 해당 페이지의 모든 이미지 요소에 대해 반복
+        page_num = int(page_num)
         for image_element in state["section_elements"][page_num]["image_elements"]:
             # 이미지 ID를 정수로 변환
             image_id = str(image_element["id"])
@@ -193,12 +203,13 @@ def create_table_summary_data_batches(state: GraphState):
     data_batches = []
 
     # 페이지 번호를 오름차순으로 정렬
-    page_numbers = sorted(list(state["section_elements"].keys()))
+    page_numbers = list(state["texts_summary"].keys())
 
     for page_num in page_numbers:
         # 각 페이지의 요약된 텍스트를 가져옴
         text = state["texts_summary"][str(page_num)]
         # 해당 페이지의 모든 테이블 요소에 대해 반복
+        page_num = int(page_num)
         for image_element in state["section_elements"][page_num]["table_elements"]:
             # 테이블 ID를 정수로 변환
             image_id = str(image_element["id"])
@@ -501,3 +512,11 @@ def get_translator(model_name, prompt):
     
     
     return text_summary_chain
+
+
+
+
+
+
+
+
